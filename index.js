@@ -1,16 +1,15 @@
 const TelegramBot = require("node-telegram-bot-api");
-const axinpmos = require("axios");
+const axios = require("axios");
 const express = require("express");
-const app = express(); 
+const fs = require('fs');
+require('dotenv').config();
+
+const app = express();
 
 let fetch;
-
 (async () => {
   fetch = (await import('node-fetch')).default;
 })();
-
-const fs = require('fs');
-require('dotenv').config();
 
 app.get("/", (req, res) => {
   res.send("Bot is alive");
@@ -23,69 +22,61 @@ app.listen(port, () => {
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 
+const collections = [
+  { collectionName: 'tformr.funko', templateId: 784092 },
+  { collectionName: 'fools.funko', templateId: 789403 },
+  { collectionName: 'funime.funko', templateId: 795119, templateId2: 795122 } // New collection with templateId2
+];
+
 let notificationTimeout;
-let lastNotificationMessageId;
+let lastNotificationMessageId = {};
 
 bot.onText(/\/checkprice/, async (msg) => {
-  const collections = [
-    { collectionName: 'tformr.funko', templateId: 784092 },
-    { collectionName: 'fools.funko', templateId: 789403 }
-  ];
-
   for (const collection of collections) {
     try {
       const photo = await getPhoto(collection.collectionName);
-      const title = await getСollectionData(collection.collectionName);
-      const prices = await getPrices(collection.templateId, collection.collectionName);
+      const title = await getCollectionData(collection.collectionName);
+      const prices = await getPrices(collection.templateId, collection.collectionName, collection.templateId2);
       const caption = `<b>${title}</b>\n\n${prices}`;
       await bot.sendPhoto(msg.chat.id, photo, { caption, parse_mode: 'HTML' });
     } catch (error) {
-      console.log(error);
-      bot.sendMessage(msg.chat.id, `Виникла помилка при виконанні запиту для колекції ${collection.collectionName}.`);
+      console.error(error);
+      bot.sendMessage(msg.chat.id, `Error occurred while fetching data for collection ${collection.collectionName}.`);
     }
   }
 });
 
-
-bot.onText(/\/enablenotifications(?: (\d+))?/, async (msg, match) => {
+bot.onText(/\/enablenotifications(?: (\d+))?/, (msg, match) => {
   const intervalMinutes = match[1] ? Number(match[1]) : 5;
   if (isNaN(intervalMinutes) || intervalMinutes <= 0) {
-    bot.sendMessage(msg.chat.id, 'Некоректно вказаний інтервал сповіщень. Будь ласка, введіть число більше нуля.');
+    bot.sendMessage(msg.chat.id, 'Invalid notification interval. Please enter a number greater than zero.');
     return;
   }
 
   clearTimeout(notificationTimeout);
-  lastNotificationMessageId = null;
+  lastNotificationMessageId = {};
 
-  bot.sendMessage(msg.chat.id, `Сповіщення про ціну увімкнені! Сповіщення будуть надходити кожні ${intervalMinutes} хвилин.`);
+  bot.sendMessage(msg.chat.id, `Price notifications enabled! Notifications will be sent every ${intervalMinutes} minutes.`);
 
   const sendNotifications = async () => {
-    const collections = [
-      { collectionName: 'tformr.funko', templateId: 784092 },
-      { collectionName: 'fools.funko', templateId: 789403 }
-    ];
-  
     for (const collection of collections) {
       try {
-        // Перевірка, чи існує ID останнього повідомлення перед видаленням
-        if (lastNotificationMessageId && lastNotificationMessageId[collection.collectionName]) {
+        if (lastNotificationMessageId[collection.collectionName]) {
           await bot.deleteMessage(msg.chat.id, lastNotificationMessageId[collection.collectionName]);
         }
-  
+
         const photo = await getPhoto(collection.collectionName);
-        const title = await getСollectionData(collection.collectionName);
-        const prices = await getPrices(collection.templateId, collection.collectionName);
+        const title = await getCollectionData(collection.collectionName);
+        const prices = await getPrices(collection.templateId, collection.collectionName, collection.templateId2);
         const caption = `<b>${title}</b>\n\n${prices}`;
         const newMessage = await bot.sendPhoto(msg.chat.id, photo, { caption, parse_mode: 'HTML' });
-  
-        // Оновлення ID останнього повідомлення для кожної колекції
-        lastNotificationMessageId = lastNotificationMessageId || {};
+
         lastNotificationMessageId[collection.collectionName] = newMessage.message_id;
       } catch (error) {
-        console.log('Помилка при надсиланні сповіщення:', error);
+        console.error('Error sending notification:', error);
       }
     }
-  
+
     notificationTimeout = setTimeout(sendNotifications, intervalMinutes * 60 * 1000);
   };
 
@@ -96,17 +87,17 @@ bot.onText(/\/disablenotifications/, (msg) => {
   if (notificationTimeout) {
     clearTimeout(notificationTimeout);
     notificationTimeout = null;
-    bot.sendMessage(msg.chat.id, 'Сповіщення про ціну вимкнені!');
+    bot.sendMessage(msg.chat.id, 'Price notifications disabled!');
   } else {
-    bot.sendMessage(msg.chat.id, 'Сповіщення вже вимкнені.');
+    bot.sendMessage(msg.chat.id, 'Notifications are already disabled.');
   }
 });
 
-
-async function getPrices(templateId, collectionName) {
+async function getPrices(templateId, collectionName, templateId2 = null) {
+  const templateIdToUse = templateId2 || templateId + 1;
   const apiUrls = [
     {
-      url: `https://wax.api.atomicassets.io/atomicmarket/v2/sales?state=1&collection_name=${collectionName}&template_id=${templateId + 1}&page=1&limit=100&order=asc&sort=price`,
+      url: `https://wax.api.atomicassets.io/atomicmarket/v2/sales?state=1&collection_name=${collectionName}&template_id=${templateIdToUse}&page=1&limit=100&order=asc&sort=price`,
       label: 'Premium Pack:'
     },
     {
@@ -121,12 +112,10 @@ async function getPrices(templateId, collectionName) {
     if (result.status === 'fulfilled') {
       return result.value;
     } else {
-      return `Не вдалося отримати ціну: ${result.reason}`;
+      return `Failed to fetch price: ${result.reason}`;
     }
   }).join('\n');
 }
-
-
 
 async function getPrice(item) {
   try {
@@ -144,56 +133,51 @@ async function getPrice(item) {
       }
       return message;
     } else {
-      throw new Error(`Не вдалося отримати ціну ${item.label}`);
+      throw new Error(`Failed to fetch price for ${item.label}`);
     }
   } catch (error) {
-    console.log('Помилка при отриманні ціни:', error);
-    return {
-      label: item.label,
-      message: error.message
-    };
+    console.error('Error fetching price:', error);
+    return `Failed to fetch price for ${item.label}: ${error.message}`;
   }
 }
 
 async function getWaxPrice() {
   try {
-    const server = "https://api.coincap.io/v2/assets/wax";
-    const response = await fetch(server);
+    const response = await fetch("https://api.coincap.io/v2/assets/wax");
     const responseResult = await response.json();
     if (response.ok) {
       return responseResult.data.priceUsd;
     } else {
-      throw new Error('Помилка при отриманні ціни WAX.');
+      throw new Error('Error fetching WAX price.');
     }
   } catch (error) {
-    console.log('Помилка при отриманні ціни WAX:', error);
+    console.error('Error fetching WAX price:', error);
     throw error;
   }
 }
 
-
 async function getPhoto(collectionName) {
-  const server = 'https://wax.api.atomicassets.io/atomicassets/v1/collections/' + collectionName;
-  const response = await fetch(server, { method: 'GET' });
-  const responseResult = await response.json();
-
-  const photoUrl = 'https://atomichub-ipfs.com/ipfs/' + (JSON.parse(responseResult.data.data.images)).logo_512x512;
-
-  const photoResponse = await fetch(photoUrl);
-  const photo = await photoResponse.buffer();
-
-  return photo;
+  try {
+    const response = await fetch(`https://wax.api.atomicassets.io/atomicassets/v1/collections/${collectionName}`);
+    const responseResult = await response.json();
+    const photoUrl = 'https://atomichub-ipfs.com/ipfs/' + JSON.parse(responseResult.data.data.images).logo_512x512;
+    const photoResponse = await fetch(photoUrl);
+    return await photoResponse.buffer();
+  } catch (error) {
+    console.error('Error fetching photo:', error);
+    throw error;
+  }
 }
 
-
-async function getСollectionData(collectionName) {
-  const server = 'https://wax.api.atomicassets.io/atomicassets/v1/assets?collection_name=' + collectionName + '&schema_name=packs.drop&page=1&limit=1&order=desc&sort=name';
-  const response = await fetch(server, { method: 'GET' });
-  const responseResult = await response.json();
-
-  const title = responseResult.data[0].collection.name;
-  //const templateId = responseResult.data[0].template.template_id;
-  return title;
+async function getCollectionData(collectionName) {
+  try {
+    const response = await fetch(`https://wax.api.atomicassets.io/atomicassets/v1/assets?collection_name=${collectionName}&schema_name=packs.drop&page=1&limit=1&order=desc&sort=name`);
+    const responseResult = await response.json();
+    return responseResult.data[0].collection.name;
+  } catch (error) {
+    console.error('Error fetching collection data:', error);
+    throw error;
+  }
 }
 
 module.exports = app;
