@@ -96,6 +96,10 @@ bot.onText(/\/disablenotifications/, (msg) => {
 async function getPrices(templateId, collectionName, templateId2 = null, templateId3 = null) {
   const templateIdToUse = templateId2 || templateId + 1;
   const apiUrls = [
+    ...(templateId3 ? [{
+      url: `https://wax.api.atomicassets.io/atomicmarket/v2/sales?state=1&collection_name=${collectionName}&template_id=${templateId3}&page=1&limit=100&order=asc&sort=price`,
+      label: 'Mythic Pack:'
+    }] : []),
     {
       url: `https://wax.api.atomicassets.io/atomicmarket/v2/sales?state=1&collection_name=${collectionName}&template_id=${templateIdToUse}&page=1&limit=100&order=asc&sort=price`,
       label: 'Premium Pack:'
@@ -105,13 +109,6 @@ async function getPrices(templateId, collectionName, templateId2 = null, templat
       label: 'Standard Pack:'
     }
   ];
-
-  if (templateId3) {
-    apiUrls.push({
-      url: `https://wax.api.atomicassets.io/atomicmarket/v2/sales?state=1&collection_name=${collectionName}&template_id=${templateId3}&page=1&limit=100&order=asc&sort=price`,
-      label: 'Mythic Pack:'
-    });
-  }
 
   const pricePromises = apiUrls.map(getPrice);
   const results = await Promise.allSettled(pricePromises);
