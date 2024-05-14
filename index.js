@@ -25,7 +25,7 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 const collections = [
   { collectionName: 'tformr.funko', templateId: 784092 },
   { collectionName: 'fools.funko', templateId: 789403 },
-  { collectionName: 'funime.funko', templateId: 795119, templateId2: 795122 } // New collection with templateId2
+  { collectionName: 'funime.funko', templateId: 795119, templateId2: 795122, templateId3: 795120 } // New collection with templateId2 and templateId3
 ];
 
 let notificationTimeout;
@@ -36,7 +36,7 @@ bot.onText(/\/checkprice/, async (msg) => {
     try {
       const photo = await getPhoto(collection.collectionName);
       const title = await getCollectionData(collection.collectionName);
-      const prices = await getPrices(collection.templateId, collection.collectionName, collection.templateId2);
+      const prices = await getPrices(collection.templateId, collection.collectionName, collection.templateId2, collection.templateId3);
       const caption = `<b>${title}</b>\n\n${prices}`;
       await bot.sendPhoto(msg.chat.id, photo, { caption, parse_mode: 'HTML' });
     } catch (error) {
@@ -67,7 +67,7 @@ bot.onText(/\/enablenotifications(?: (\d+))?/, (msg, match) => {
 
         const photo = await getPhoto(collection.collectionName);
         const title = await getCollectionData(collection.collectionName);
-        const prices = await getPrices(collection.templateId, collection.collectionName, collection.templateId2);
+        const prices = await getPrices(collection.templateId, collection.collectionName, collection.templateId2, collection.templateId3);
         const caption = `<b>${title}</b>\n\n${prices}`;
         const newMessage = await bot.sendPhoto(msg.chat.id, photo, { caption, parse_mode: 'HTML' });
 
@@ -93,7 +93,7 @@ bot.onText(/\/disablenotifications/, (msg) => {
   }
 });
 
-async function getPrices(templateId, collectionName, templateId2 = null) {
+async function getPrices(templateId, collectionName, templateId2 = null, templateId3 = null) {
   const templateIdToUse = templateId2 || templateId + 1;
   const apiUrls = [
     {
@@ -105,6 +105,13 @@ async function getPrices(templateId, collectionName, templateId2 = null) {
       label: 'Standard Pack:'
     }
   ];
+
+  if (templateId3) {
+    apiUrls.push({
+      url: `https://wax.api.atomicassets.io/atomicmarket/v2/sales?state=1&collection_name=${collectionName}&template_id=${templateId3}&page=1&limit=100&order=asc&sort=price`,
+      label: 'Mythic Pack:'
+    });
+  }
 
   const pricePromises = apiUrls.map(getPrice);
   const results = await Promise.allSettled(pricePromises);
