@@ -25,7 +25,8 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 const collections = [
   { collectionName: 'fools.funko', templateId: 789403 },
   { collectionName: 'funime.funko', templateId: 795119, templateId2: 795122, templateId3: 795120 }, 
-  { collectionName: 'scooby.funko', templateId: 797542 } 
+  { collectionName: 'scooby.funko', templateId: 797542 },
+  { collectionName: 'batman.funko', templateId: 801966 }
 ];
 
 let notificationTimeout;
