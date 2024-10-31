@@ -23,7 +23,7 @@ app.listen(port, () => {
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 
 const collections = [
-  { collectionName: 'ram.funko', templateId: 824299 }
+  { collectionName: 'spooky.funko', templateId: 850213 }
 ];
 
 let notificationTimeout;
